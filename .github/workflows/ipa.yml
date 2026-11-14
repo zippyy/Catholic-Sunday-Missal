@@ -1,0 +1,30 @@
+name: Build unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build iOS application
+        run: |
+          xcodebuild -project SundayMissal.xcodeproj -scheme SundayMissal -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SundayMissal.app Payload/
+          zip -qry SundayMissal-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SundayMissal-unsigned-IPA
+          path: SundayMissal-unsigned.ipa
+          if-no-files-found: error
