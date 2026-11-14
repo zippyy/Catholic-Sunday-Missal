@@ -4,7 +4,10 @@ import SwiftUI
 struct SundayMissalApp: App {
     var body: some Scene {
         WindowGroup {
-            MissalReader().preferredColorScheme(.light)
+            MissalReader()
+                .preferredColorScheme(.light)
+                .statusBarHidden()
+                .persistentSystemOverlays(.hidden)
         }
     }
 }
@@ -14,10 +17,13 @@ struct MissalReader: View {
     @State private var page = 0
     @State private var fontSize: CGFloat = 19
     @State private var showContents = false
-    @State private var cover = true
-    private let leather = Color(red: 0.25, green: 0.12, blue: 0.105)
-    private let gold = Color(red: 0.82, green: 0.68, blue: 0.44)
+    @State private var showDate = false
+    @State private var showSettings = false
+    @State private var showCover = false
+
     private let calendar = Calendar(identifier: .gregorian)
+    private let gold = Color(red: 0.60, green: 0.39, blue: 0.14)
+    private let leather = Color(red: 0.31, green: 0.23, blue: 0.19)
 
     private var sundays: [Date] {
         let first = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
@@ -32,117 +38,149 @@ struct MissalReader: View {
     }
     private var pages: [(String, String)] {
         [
-            ("Sunday Mass", "\(date.formatted(date: .complete, time: .omitted))\n\nThis independent companion follows the order of Sunday Mass. The official readings can be opened using the Readings link."),
+            ("Sunday Mass", "\(date.formatted(date: .complete, time: .omitted))\n\nA companion for following the celebration of Mass. The official readings are available through the Readings button."),
             ("Introductory Rites", "Entrance\n\nSign of the Cross and Greeting\n\nPenitential Act\n\nKyrie\n\nGloria (when prescribed)\n\nCollect"),
             ("Liturgy of the Word", "First Reading\n\nResponsorial Psalm\n\nSecond Reading\n\nGospel Acclamation\n\nGospel\n\nHomily"),
-            ("Profession of Faith", "Nicene Creed or Apostles' Creed (when prescribed)\n\nUniversal Prayer\n\nFor Scripture texts, use the official readings link."),
+            ("Profession of Faith", "Nicene Creed or Apostles' Creed (when prescribed)\n\nUniversal Prayer\n\nUse the Readings button to open the official Scripture texts."),
             ("Liturgy of the Eucharist", "Preparation of the Gifts\n\nPrayer over the Offerings\n\nEucharistic Prayer\n\nMemorial Acclamation\n\nGreat Amen"),
             ("Communion Rite", "The Lord's Prayer\n\nSign of Peace\n\nBreaking of the Bread\n\nCommunion\n\nPrayer after Communion"),
-            ("Concluding Rites", "Blessing\n\nDismissal\n\nThe official U.S. Lectionary, Roman Missal, and Breaking Bread texts are not bundled in this prototype.")
+            ("Concluding Rites", "Blessing\n\nDismissal\n\nThis prototype does not include licensed Roman Missal, U.S. Lectionary, or Breaking Bread texts.")
         ]
     }
+
     var body: some View {
         GeometryReader { geometry in
-            // Use available logical width, not device model, to determine facing pages.
-            // On a two-panel device the app must span both displays to reach this width.
-            let twoPage = geometry.size.width >= 580
-            let step = twoPage ? 2 : 1
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showContents = true } label: { Image(systemName: "list.bullet") }
-                    Text("SUNDAY MISSAL")
-                        .font(.system(size: 18, weight: .semibold, design: .serif))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Spacer()
-                    Button { fontSize = max(14, fontSize - 2) } label: { Image(systemName: "textformat.size.smaller") }
-                    Button { fontSize = min(30, fontSize + 2) } label: { Image(systemName: "textformat.size.larger") }
-                    Button { cover = true } label: { Image(systemName: "book.closed") }
-                }
-                .padding(.horizontal, 15)
-                .frame(height: 50)
-                HStack {
-                    Menu {
-                        ForEach(sundays.indices, id: \.self) { i in
-                            Button(sundays[i].formatted(date: .abbreviated, time: .omitted)) {
-                                sunday = i
-                                page = 0
-                                cover = false
-                            }
-                        }
-                    } label: { Label(date.formatted(.dateTime.month(.abbreviated).day().year()), systemImage: "calendar") }
-                    Spacer()
-                    Link(destination: readingsURL) { Label("Readings", systemImage: "book") }
-                }
-                .font(.system(size: 13, weight: .medium))
-                .padding(.horizontal, 16)
-                .frame(height: 42)
+            let landscape = geometry.size.width > geometry.size.height
+            let facing = landscape && geometry.size.width >= 750
+            let toolbarWidth: CGFloat = landscape ? 76 : 60
+            let bookWidth = max(1, geometry.size.width - toolbarWidth - (landscape ? 38 : 12))
+            let step = facing ? 2 : 1
 
-                GeometryReader { area in
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(leather)
-                        if cover {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(LinearGradient(colors: [Color(red: 0.40, green: 0.22, blue: 0.17), leather], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(gold, lineWidth: 2)
-                                    .padding(17)
-                                VStack(spacing: 25) {
-                                    Image(systemName: "cross").font(.system(size: 45, weight: .ultraLight))
-                                    Text("SUNDAY\nMISSAL")
-                                        .font(.system(size: 38, weight: .semibold, design: .serif))
-                                        .multilineTextAlignment(.center)
-                                    Text("2026").font(.system(size: 27, design: .serif))
-                                    Text("TAP TO OPEN").font(.caption).tracking(2)
-                                }
-                                .foregroundStyle(gold)
-                            }
-                            .padding(7)
-                            .contentShape(Rectangle())
-                            .onTapGesture { cover = false }
-                        } else {
-                            CurlBook(pages: pages, twoPage: twoPage, fontSize: fontSize, page: $page)
-                                .id("\(twoPage)-\(fontSize)-\(sunday)")
-                                .padding(7)
-                        }
+            HStack(spacing: landscape ? 16 : 5) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: landscape ? 24 : 3)
+                        .fill(leather)
+                        .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                    if showCover {
+                        coverView
+                            .padding(10)
+                            .onTapGesture { showCover = false }
+                    } else {
+                        CurlBook(pages: pages, twoPage: facing, fontSize: fontSize, page: $page)
+                            .id("\(facing)-\(fontSize)-\(sunday)")
+                            .padding(landscape ? 12 : 0)
                     }
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 4)
                 }
-
-                HStack {
-                    Button { if cover { cover = false } else { page = max(0, page - step) } } label: { Label("Back", systemImage: "chevron.left") }
-                        .disabled(!cover && page == 0)
-                    Spacer()
-                    Text(cover ? "COVER" : "\(page + 1) / \(pages.count)")
-                        .font(.system(.caption, design: .serif))
-                    Spacer()
-                    Button { if cover { cover = false } else { page = min(pages.count - 1, page + step) } } label: { Label("Next", systemImage: "chevron.right") }
-                        .disabled(!cover && page + step >= pages.count)
+                .frame(width: bookWidth)
+                .padding(.leading, landscape ? 18 : 0)
+                VStack(spacing: 0) {
+                    Spacer(minLength: 10)
+                    tool("book.pages", label: "Contents") { showContents = true }
+                    tool("calendar", label: "Sunday") { showDate = true }
+                    Link(destination: readingsURL) {
+                        VStack(spacing: 5) {
+                            Image(systemName: "text.book.closed")
+                                .font(.system(size: 22))
+                            Text("Readings").font(.system(size: 10, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.vertical, 12)
+                    tool("textformat.size", label: "Text") { showSettings = true }
+                    tool("chevron.left", label: "Back") { page = max(0, page - step); showCover = false }
+                    tool("chevron.right", label: "Next") { page = min(pages.count - 1, page + step); showCover = false }
+                    tool("book.closed", label: "Cover") { showCover = true }
+                    Spacer(minLength: 10)
                 }
-                .font(.system(size: 14, weight: .semibold))
-                .padding(.horizontal, 16)
-                .frame(height: 50)
+                .foregroundStyle(Color(red: 0.28, green: 0.20, blue: 0.14))
+                .frame(width: toolbarWidth)
+                .background(Color(red: 0.96, green: 0.92, blue: 0.81), in: RoundedRectangle(cornerRadius: 25))
+                .padding(.trailing, landscape ? 12 : 4)
             }
-            .foregroundStyle(gold)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(leather.ignoresSafeArea())
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background(
+                LinearGradient(colors: [Color(red: 0.29, green: 0.18, blue: 0.12), Color(red: 0.45, green: 0.31, blue: 0.21), Color(red: 0.26, green: 0.17, blue: 0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .ignoresSafeArea()
+            )
         }
+        .ignoresSafeArea()
         .sheet(isPresented: $showContents) {
             NavigationStack {
                 List(pages.indices, id: \.self) { i in
                     Button(pages[i].0) {
                         page = i
-                        cover = false
+                        showCover = false
                         showContents = false
                     }
                 }
                 .navigationTitle("Contents")
                 .toolbar { Button("Done") { showContents = false } }
             }
+        }
+        .sheet(isPresented: $showDate) {
+            NavigationStack {
+                List(sundays.indices, id: \.self) { i in
+                    Button(sundays[i].formatted(date: .complete, time: .omitted)) {
+                        sunday = i
+                        page = 0
+                        showCover = false
+                        showDate = false
+                    }
+                }
+                .navigationTitle("2026 Sundays")
+                .toolbar { Button("Done") { showDate = false } }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                VStack(spacing: 25) {
+                    Text("Text size").font(.headline)
+                    HStack {
+                        Button("Smaller") { fontSize = max(14, fontSize - 2) }
+                        Spacer()
+                        Text("\(Int(fontSize)) pt")
+                        Spacer()
+                        Button("Larger") { fontSize = min(30, fontSize + 2) }
+                    }
+                    .padding()
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle("Reading Settings")
+                .toolbar { Button("Done") { showSettings = false } }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private func tool(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 22))
+                Text(label).font(.system(size: 10, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+        }
+    }
+
+    private var coverView: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 0.30, green: 0.12, blue: 0.10))
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(gold, lineWidth: 2)
+                .padding(22)
+            VStack(spacing: 25) {
+                Image(systemName: "cross").font(.system(size: 45, weight: .ultraLight))
+                Text("SUNDAY MISSAL")
+                    .font(.system(size: 37, weight: .medium, design: .serif))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                Text("2026").font(.system(size: 25, design: .serif))
+                Text("TAP TO OPEN").font(.caption).tracking(2)
+            }
+            .foregroundStyle(gold)
         }
     }
 }
