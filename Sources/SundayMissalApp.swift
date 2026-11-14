@@ -12,10 +12,13 @@ struct SundayMissalApp: App {
     }
 }
 
+enum ReaderSection: String, CaseIterable { case missal = "Missal", prayers = "Prayers", rosary = "Rosary" }
+
 struct MissalReader: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @StateObject private var readings = ReadingsLoader()
+    @State private var section: ReaderSection = .missal
     @State private var sunday = 0
     @State private var page = 0
     @State private var fontSize: CGFloat = 19
@@ -40,6 +43,11 @@ struct MissalReader: View {
         return URL(string: "https://bible.usccb.org/bible/readings/\(f.string(from: date)).cfm")!
     }
     private var sourceSections: [(String, String)] {
+        switch section {
+        case .prayers: return DevotionalContent.prayers
+        case .rosary: return DevotionalContent.rosary
+        case .missal: break
+        }
         if readings.isLoading {
             return [("Loading Sunday Readings", "Retrieving the Scripture readings for \(date.formatted(date: .complete, time: .omitted))…")]
         }
@@ -75,7 +83,7 @@ struct MissalReader: View {
                             .onTapGesture { showCover = false }
                     } else {
                         CurlBook(pages: bookPages, twoPage: facing, fontSize: fontSize, page: $page)
-                            .id("\(facing)-\(fontSize)-\(sunday)-\(readings.isLoading)-\(readings.sections.count)-\(readings.error ?? "")")
+                            .id("\(section.rawValue)-\(facing)-\(fontSize)-\(sunday)-\(readings.isLoading)-\(readings.sections.count)-\(readings.error ?? "")")
                             .padding(landscape ? 12 : 0)
                     }
                 }
@@ -84,10 +92,13 @@ struct MissalReader: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 10)
                     tool("book.pages", label: "Contents") { showContents = true }
-                    if readings.isLoading { ProgressView().tint(.brown) }
-                    if readings.error != nil { tool("arrow.clockwise", label: "Retry") { readings.load(readingsURL) } }
-                    tool("calendar", label: "Sunday") { showDate = true }
-                    tool("text.book.closed", label: "Readings") { page = min(1, maxPage); showCover = false }
+                    tool("cross", label: "Prayers") { switchTo(.prayers) }
+                    tool("circle.hexagongrid", label: "Rosary") { switchTo(.rosary) }
+                    tool("book.closed", label: "Missal") { switchTo(.missal) }
+                    if section == .missal && readings.isLoading { ProgressView().tint(.brown) }
+                    if section == .missal && readings.error != nil { tool("arrow.clockwise", label: "Retry") { readings.load(readingsURL) } }
+                    if section == .missal { tool("calendar", label: "Sunday") { showDate = true } }
+                    if section == .missal { tool("text.book.closed", label: "Readings") { page = min(1, maxPage); showCover = false } }
                     tool("textformat.size", label: "Text") { showSettings = true }
                     tool("chevron.left", label: "Back") { page = max(0, page - step); showCover = false }
                     tool("chevron.right", label: "Next") { page = min(maxPage, page + step); showCover = false }
@@ -156,6 +167,12 @@ struct MissalReader: View {
             }
             .presentationDetents([.medium])
         }
+    }
+
+    private func switchTo(_ next: ReaderSection) {
+        section = next
+        page = 0
+        showCover = false
     }
 
     private func buildPages(width: CGFloat, height: CGFloat) -> [(String, String)] {
