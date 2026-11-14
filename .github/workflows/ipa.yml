@@ -6,11 +6,18 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: xcode-27
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 27.1 (required for Duo edge-to-edge support)
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          xcodebuild -version
+          SDK="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: $SDK"
+          test "$SDK" = "27.1" || { echo "ERROR: iOS 27.1 SDK required"; exit 1; }
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
