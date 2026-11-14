@@ -22,6 +22,7 @@ struct MissalReader: View {
     @State private var showDate = false
     @State private var showSettings = false
     @State private var showCover = false
+    @State private var showReadings = false
 
     private let calendar = Calendar(identifier: .gregorian)
     private let gold = Color(red: 0.60, green: 0.39, blue: 0.14)
@@ -80,7 +81,7 @@ struct MissalReader: View {
                     Spacer(minLength: 10)
                     tool("book.pages", label: "Contents") { showContents = true }
                     tool("calendar", label: "Sunday") { showDate = true }
-                    Link(destination: readingsURL) {
+                    Button { showReadings = true } label: {
                         VStack(spacing: 5) {
                             Image(systemName: "text.book.closed")
                                 .font(.system(size: 22))
@@ -133,6 +134,9 @@ struct MissalReader: View {
                 .navigationTitle("2026 Sundays")
                 .toolbar { Button("Done") { showDate = false } }
             }
+        }
+        .fullScreenCover(isPresented: $showReadings) {
+            OfficialReadingsView(url: readingsURL, date: date, onClose: { showReadings = false })
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
