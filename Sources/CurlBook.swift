@@ -92,6 +92,8 @@ final class BookPageController: UIViewController {
         guard !blank else { return }
 
         let scroll = UIScrollView()
+        scroll.isScrollEnabled = false
+        scroll.showsVerticalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(scroll)
         NSLayoutConstraint.activate([
