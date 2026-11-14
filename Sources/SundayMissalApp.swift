@@ -90,7 +90,7 @@ struct MissalReader: View {
                 .frame(width: bookWidth)
                 .padding(.leading, landscape ? 18 : 0)
                 VStack(spacing: 0) {
-                    Spacer(minLength: 10)
+                    Spacer(minLength: landscape ? 10 : 72)
                     tool("book.pages", label: "Contents") { showContents = true }
                     tool("cross", label: "Prayers") { switchTo(.prayers) }
                     tool("circle.hexagongrid", label: "Rosary") { switchTo(.rosary) }
@@ -102,7 +102,6 @@ struct MissalReader: View {
                     tool("textformat.size", label: "Text") { showSettings = true }
                     tool("chevron.left", label: "Back") { page = max(0, page - step); showCover = false }
                     tool("chevron.right", label: "Next") { page = min(maxPage, page + step); showCover = false }
-                    tool("book.closed", label: "Cover") { showCover = true }
                     Spacer(minLength: 10)
                 }
                 .foregroundStyle(Color(red: 0.28, green: 0.20, blue: 0.14))
