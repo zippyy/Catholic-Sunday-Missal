@@ -23,7 +23,6 @@ struct MissalReader: View {
     @State private var showDate = false
     @State private var showSettings = false
     @State private var showCover = false
-    @State private var showReadings = false
 
     private let calendar = Calendar(identifier: .gregorian)
     private let gold = Color(red: 0.60, green: 0.39, blue: 0.14)
@@ -40,16 +39,17 @@ struct MissalReader: View {
         f.dateFormat = "MMddyy"
         return URL(string: "https://bible.usccb.org/bible/readings/\(f.string(from: date)).cfm")!
     }
-    private var outlinePages: [(String, String)] {
-        [
-            ("Sunday Mass", "\(date.formatted(date: .complete, time: .omitted))\n\nA companion for following the celebration of Mass. The official readings are available through the Readings button."),
-            ("Introductory Rites", "Entrance\n\nSign of the Cross and Greeting\n\nPenitential Act\n\nKyrie\n\nGloria (when prescribed)\n\nCollect"),
-            ("Liturgy of the Word", "First Reading\n\nResponsorial Psalm\n\nSecond Reading\n\nGospel Acclamation\n\nGospel\n\nHomily"),
-            ("Profession of Faith", "Nicene Creed or Apostles' Creed (when prescribed)\n\nUniversal Prayer\n\nUse the Readings button to open the official Scripture texts."),
-            ("Liturgy of the Eucharist", "Preparation of the Gifts\n\nPrayer over the Offerings\n\nEucharistic Prayer\n\nMemorial Acclamation\n\nGreat Amen"),
-            ("Communion Rite", "The Lord's Prayer\n\nSign of Peace\n\nBreaking of the Bread\n\nCommunion\n\nPrayer after Communion"),
-            ("Concluding Rites", "Blessing\n\nDismissal\n\nThis prototype does not include licensed Roman Missal, U.S. Lectionary, or Breaking Bread texts.")
-        ]
+    private var sourceSections: [(String, String)] {
+        if readings.isLoading {
+            return [("Loading Sunday Readings", "Retrieving the Scripture readings for \(date.formatted(date: .complete, time: .omitted))…")]
+        }
+        if let error = readings.error {
+            return [("Readings Unavailable", "\(error)\n\nTap Retry in the toolbar to load the readings again.")]
+        }
+        if readings.sections.isEmpty {
+            return [("Sunday Readings", "Select a Sunday to begin.")]
+        }
+        return [("Sunday Mass", date.formatted(date: .complete, time: .omitted))] + readings.sections
     }
 
     var body: some View {
@@ -75,7 +75,7 @@ struct MissalReader: View {
                             .onTapGesture { showCover = false }
                     } else {
                         CurlBook(pages: bookPages, twoPage: facing, fontSize: fontSize, page: $page)
-                            .id("\(facing)-\(fontSize)-\(sunday)")
+                            .id("\(facing)-\(fontSize)-\(sunday)-\(readings.isLoading)-\(readings.sections.count)-\(readings.error ?? "")")
                             .padding(landscape ? 12 : 0)
                     }
                 }
@@ -87,15 +87,7 @@ struct MissalReader: View {
                     if readings.isLoading { ProgressView().tint(.brown) }
                     if readings.error != nil { tool("arrow.clockwise", label: "Retry") { readings.load(readingsURL) } }
                     tool("calendar", label: "Sunday") { showDate = true }
-                    Button { showReadings = true } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: "text.book.closed")
-                                .font(.system(size: 22))
-                            Text("Readings").font(.system(size: 10, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .padding(.vertical, 12)
+                    tool("text.book.closed", label: "Readings") { page = min(1, maxPage); showCover = false }
                     tool("textformat.size", label: "Text") { showSettings = true }
                     tool("chevron.left", label: "Back") { page = max(0, page - step); showCover = false }
                     tool("chevron.right", label: "Next") { page = min(maxPage, page + step); showCover = false }
@@ -117,9 +109,11 @@ struct MissalReader: View {
         .task(id: sunday) { readings.load(readingsURL) }
         .sheet(isPresented: $showContents) {
             NavigationStack {
-                List(outlinePages.indices, id: \.self) { i in
-                    Button(outlinePages[i].0) {
-                        page = i
+                List(sourceSections.indices, id: \.self) { i in
+                    Button(sourceSections[i].0) {
+                        let prefix = Array(sourceSections.prefix(i))
+                        let contentWidth: CGFloat = 350
+                        page = BookPaginator.paginate(prefix, width: contentWidth, height: 700, fontSize: fontSize).count
                         showCover = false
                         showContents = false
                     }
@@ -141,9 +135,6 @@ struct MissalReader: View {
                 .navigationTitle("2026 Sundays")
                 .toolbar { Button("Done") { showDate = false } }
             }
-        }
-        .fullScreenCover(isPresented: $showReadings) {
-            OfficialReadingsView(url: readingsURL, date: date, onClose: { showReadings = false })
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -168,14 +159,7 @@ struct MissalReader: View {
     }
 
     private func buildPages(width: CGFloat, height: CGFloat) -> [(String, String)] {
-        let readingsPages = BookPaginator.paginate(readings.sections, width: width, height: height, fontSize: fontSize)
-        var combined = outlinePages
-        if !readingsPages.isEmpty {
-            // Place the readings at the beginning of the Liturgy of the Word.
-            combined.remove(at: 2)
-            combined.insert(contentsOf: readingsPages, at: 2)
-        }
-        return BookPaginator.paginate(combined, width: width, height: height, fontSize: fontSize)
+        BookPaginator.paginate(sourceSections, width: width, height: height, fontSize: fontSize)
     }
 
     private func tool(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
