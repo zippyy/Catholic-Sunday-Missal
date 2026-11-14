@@ -15,6 +15,7 @@ struct SundayMissalApp: App {
 struct MissalReader: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @StateObject private var readings = ReadingsLoader()
     @State private var sunday = 0
     @State private var page = 0
     @State private var fontSize: CGFloat = 19
@@ -39,7 +40,7 @@ struct MissalReader: View {
         f.dateFormat = "MMddyy"
         return URL(string: "https://bible.usccb.org/bible/readings/\(f.string(from: date)).cfm")!
     }
-    private var pages: [(String, String)] {
+    private var outlinePages: [(String, String)] {
         [
             ("Sunday Mass", "\(date.formatted(date: .complete, time: .omitted))\n\nA companion for following the celebration of Mass. The official readings are available through the Readings button."),
             ("Introductory Rites", "Entrance\n\nSign of the Cross and Greeting\n\nPenitential Act\n\nKyrie\n\nGloria (when prescribed)\n\nCollect"),
@@ -59,6 +60,9 @@ struct MissalReader: View {
             let toolbarWidth: CGFloat = landscape ? 76 : 60
             let bookWidth = max(1, geometry.size.width - toolbarWidth - (landscape ? 38 : 12))
             let step = facing ? 2 : 1
+            let contentWidth = max(160, (bookWidth - (facing ? 35 : 10)) / (facing ? 2 : 1))
+            let bookPages = buildPages(width: contentWidth, height: geometry.size.height)
+            let maxPage = max(0, bookPages.count - 1)
 
             HStack(spacing: landscape ? 16 : 5) {
                 ZStack {
@@ -70,7 +74,7 @@ struct MissalReader: View {
                             .padding(10)
                             .onTapGesture { showCover = false }
                     } else {
-                        CurlBook(pages: pages, twoPage: facing, fontSize: fontSize, page: $page)
+                        CurlBook(pages: bookPages, twoPage: facing, fontSize: fontSize, page: $page)
                             .id("\(facing)-\(fontSize)-\(sunday)")
                             .padding(landscape ? 12 : 0)
                     }
@@ -80,6 +84,8 @@ struct MissalReader: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 10)
                     tool("book.pages", label: "Contents") { showContents = true }
+                    if readings.isLoading { ProgressView().tint(.brown) }
+                    if readings.error != nil { tool("arrow.clockwise", label: "Retry") { readings.load(readingsURL) } }
                     tool("calendar", label: "Sunday") { showDate = true }
                     Button { showReadings = true } label: {
                         VStack(spacing: 5) {
@@ -92,7 +98,7 @@ struct MissalReader: View {
                     .padding(.vertical, 12)
                     tool("textformat.size", label: "Text") { showSettings = true }
                     tool("chevron.left", label: "Back") { page = max(0, page - step); showCover = false }
-                    tool("chevron.right", label: "Next") { page = min(pages.count - 1, page + step); showCover = false }
+                    tool("chevron.right", label: "Next") { page = min(maxPage, page + step); showCover = false }
                     tool("book.closed", label: "Cover") { showCover = true }
                     Spacer(minLength: 10)
                 }
@@ -108,10 +114,11 @@ struct MissalReader: View {
             )
         }
         .ignoresSafeArea()
+        .task(id: sunday) { readings.load(readingsURL) }
         .sheet(isPresented: $showContents) {
             NavigationStack {
-                List(pages.indices, id: \.self) { i in
-                    Button(pages[i].0) {
+                List(outlinePages.indices, id: \.self) { i in
+                    Button(outlinePages[i].0) {
                         page = i
                         showCover = false
                         showContents = false
@@ -158,6 +165,17 @@ struct MissalReader: View {
             }
             .presentationDetents([.medium])
         }
+    }
+
+    private func buildPages(width: CGFloat, height: CGFloat) -> [(String, String)] {
+        let readingsPages = BookPaginator.paginate(readings.sections, width: width, height: height, fontSize: fontSize)
+        var combined = outlinePages
+        if !readingsPages.isEmpty {
+            // Place the readings at the beginning of the Liturgy of the Word.
+            combined.remove(at: 2)
+            combined.insert(contentsOf: readingsPages, at: 2)
+        }
+        return BookPaginator.paginate(combined, width: width, height: height, fontSize: fontSize)
     }
 
     private func tool(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
