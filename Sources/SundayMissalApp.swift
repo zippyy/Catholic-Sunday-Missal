@@ -13,6 +13,8 @@ struct SundayMissalApp: App {
 }
 
 struct MissalReader: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var sunday = 0
     @State private var page = 0
     @State private var fontSize: CGFloat = 19
@@ -50,8 +52,9 @@ struct MissalReader: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let landscape = geometry.size.width > geometry.size.height
-            let facing = landscape && geometry.size.width >= 750
+            let expanded = horizontalSizeClass == .regular && verticalSizeClass == .regular
+            let landscape = geometry.size.width > geometry.size.height || expanded
+            let facing = expanded && geometry.size.width >= 600
             let toolbarWidth: CGFloat = landscape ? 76 : 60
             let bookWidth = max(1, geometry.size.width - toolbarWidth - (landscape ? 38 : 12))
             let step = facing ? 2 : 1
